@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pokédex Shiny</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: classeur de collection. En-tête avec langue et progression, filtres par groupes,
+   grille de cases (sprite normal grisé, sprite shiny en couleur une fois capturé), fiche à droite
+   (feuille en bas sur téléphone). */
+:root {
+  color-scheme: light;
+  --bg: #F1F2F6;
+  --surface: #FFFFFF;
+  --surface-2: #E8EBF2;
+  --line: #D3D8E3;
+  --fg: #151927;
+  --fg-dim: #566074;
+  --accent: #245F7D;
+  --accent-ink: #FFFFFF;
+  --foil-a: #F8DC82;
+  --foil-b: #E69B3C;
+  --foil-c: #C47818;
+  --foil-ink: #3A2400;
+  --foil-text: #8A5300;
+  --foil-bg: #FFF3D2;
+  --danger: #A32A2A;
+  --font-display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", "Noto Sans CJK JP", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0C1017; --surface: #141A24; --surface-2: #1D2532; --line: #29323F;
+    --fg: #E8ECF4; --fg-dim: #8F9AAF; --accent: #78BFDC; --accent-ink: #08141B;
+    --foil-text: #F2C14E; --foil-bg: #2B2412; --danger: #F08A8A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0C1017; --surface: #141A24; --surface-2: #1D2532; --line: #29323F;
+  --fg: #E8ECF4; --fg-dim: #8F9AAF; --accent: #78BFDC; --accent-ink: #08141B;
+  --foil-text: #F2C14E; --foil-bg: #2B2412; --danger: #F08A8A;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 22px; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* En-tête */
+.head { display: grid; grid-template-columns: 1fr auto; gap: 16px 32px; align-items: end; }
+h1 {
+  margin: 0; font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(34px, 6vw, 56px); line-height: 1; letter-spacing: -0.02em; text-wrap: balance;
+}
+h1 .foil {
+  color: var(--foil-text);
+  background: linear-gradient(100deg, var(--foil-a), var(--foil-b) 40%, var(--foil-c) 60%, var(--foil-a));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.sub { margin: 8px 0 0; color: var(--fg-dim); max-width: 52ch; }
+.score { min-width: 0; width: min(100%, 280px); display: grid; gap: 4px; }
+.langrow { display: grid; gap: 4px; margin-bottom: 8px; }
+.langrow label { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-dim); font-weight: 600; }
+select#lang {
+  width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 10px;
+}
+.score .num { font-family: var(--font-mono); font-weight: 600; font-size: 30px; font-variant-numeric: tabular-nums; }
+.score .num small { font-size: 15px; color: var(--fg-dim); font-weight: 400; }
+.bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--foil-a), var(--foil-b)); transition: width .3s ease; }
+
+/* Chargement et erreur */
+.loader, .err { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; font-size: 14px; }
+.err { border-color: var(--danger); color: var(--danger); grid-auto-flow: column; justify-content: space-between; align-items: center; }
+.err button { border: 1px solid var(--danger); background: transparent; border-radius: 8px; padding: 6px 12px; font-weight: 600; color: inherit; }
+.loader .bar { height: 6px; }
+
+/* Filtres */
+.filters { display: grid; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.frow { display: grid; grid-template-columns: 110px 1fr; gap: 8px 14px; align-items: center; }
+.flabel { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-dim); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.chip {
+  border: 1px solid var(--line); background: var(--bg); border-radius: 99px; padding: 6px 13px;
+  font-size: 14px; font-weight: 500; display: inline-flex; gap: 8px; align-items: baseline;
+}
+.chip .c { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.chip:hover { border-color: var(--fg-dim); }
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.chip[aria-pressed="true"] .c { color: inherit; opacity: .7; }
+.search {
+  width: 100%; max-width: 320px; border: 1px solid var(--line); background: var(--bg);
+  border-radius: 10px; padding: 8px 12px;
+}
+.search::placeholder { color: var(--fg-dim); }
+
+/* Corps */
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 22px; align-items: start; }
+.meta { color: var(--fg-dim); font-size: 13.5px; margin-bottom: 12px; }
+.grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+
+.tile { position: relative; min-width: 0; }
+.open {
+  width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface);
+  border-radius: 12px; padding: 8px 8px 10px; display: grid; gap: 4px; justify-items: center; min-width: 0;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.open:hover { transform: translateY(-2px); border-color: var(--fg-dim); }
+.tile.sel .open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.no { justify-self: start; font-family: var(--font-mono); font-size: 11px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.art {
+  width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; position: relative;
+  background: var(--surface-2);
+}
+.art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.art .mono { font-family: var(--font-display); font-weight: 800; font-size: 32px; color: var(--fg-dim); opacity: 0; }
+.art.noimg { border: 1px dashed var(--line); }
+.art.noimg .mono { opacity: .55; }
+.tile:not(.got):not(.own) .art img { filter: grayscale(1); opacity: .6; }
+.art .spark { display: none; position: absolute; right: -2px; top: -2px; width: 22px; height: 22px; fill: var(--foil-b); }
+.tile.got .open { background: var(--foil-bg); border-color: var(--foil-b); }
+.tile.got .art { background: radial-gradient(circle, var(--surface) 35%, var(--foil-a) 100%); box-shadow: 0 0 0 2px var(--foil-b); }
+.tile.got .art .spark { display: block; }
+.nm { font-weight: 600; font-size: 13.5px; text-align: center; overflow-wrap: anywhere; line-height: 1.2; }
+.tag { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-dim); font-weight: 600; min-height: 13px; text-align: center; overflow-wrap: anywhere; }
+.tile.got .tag { color: var(--foil-text); }
+/* Trois boutons par case : capturé, shiny, exclure */
+.acts { display: flex; justify-content: center; gap: 6px; margin-top: 6px; }
+.ab {
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg);
+  display: grid; place-items: center; padding: 0;
+}
+.ab svg { width: 15px; height: 15px; stroke: var(--fg-dim); fill: none; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; opacity: .55; }
+.ab:hover svg { opacity: 1; }
+.ab:disabled { cursor: default; }
+.ab.cap[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+.ab.cap[aria-pressed="true"] svg { stroke: var(--accent-ink); opacity: 1; }
+.ab.mark[aria-pressed="true"] { background: var(--foil-b); border-color: var(--foil-c); }
+.ab.mark[aria-pressed="true"] svg { stroke: var(--foil-ink); opacity: 1; }
+.ab.exb[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); }
+.ab.exb[aria-pressed="true"] svg { stroke: var(--bg); opacity: 1; }
+.tile.own .open { border-color: var(--accent); }
+.tile.own .art { box-shadow: 0 0 0 2px var(--accent); }
+.tile.excl .open { opacity: .55; border-style: dashed; background: var(--surface); }
+.tile.excl .cap, .tile.excl .mark { display: none; }
+.tile.excl .tag { color: var(--fg-dim); }
+/* Progression en en-tête et par génération */
+.prog { display: grid; gap: 4px; }
+.pl { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: 13px; font-weight: 600; }
+.pl b { font-family: var(--font-mono); font-size: 18px; font-variant-numeric: tabular-nums; }
+.dexbar > i { background: var(--accent); }
+.gens { display: grid; gap: 10px; }
+.gens h2 { margin: 0; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-dim); font-weight: 600; }
+.gcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.gc {
+  text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 12px;
+  padding: 12px; display: grid; gap: 10px; min-width: 0;
+}
+.gc:hover { border-color: var(--fg-dim); }
+.gc[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.gc .gh { font-family: var(--font-display); font-weight: 800; font-size: 17px; }
+.gc .gr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: baseline; font-size: 12.5px; color: var(--fg-dim); }
+.gc .gr b { font-family: var(--font-mono); font-size: 16px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.gc .gr .bar { grid-column: 1 / -1; height: 6px; }
+.empty { padding: 40px 16px; text-align: center; color: var(--fg-dim); border: 1px dashed var(--line); border-radius: 12px; }
+.empty button { margin-top: 10px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
+
+/* Fiche détail */
+.detail {
+  position: sticky; top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px; display: grid; gap: 16px; min-width: 0; max-height: calc(100vh - 32px); overflow-y: auto;
+}
+.detail .close { display: none; }
+.detail .hint { color: var(--fg-dim); margin: 0; }
+.dname { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 28px; line-height: 1.05; overflow-wrap: anywhere; }
+.dmeta { margin: 4px 0 0; color: var(--fg-dim); font-size: 13.5px; }
+.dmeta b { font-family: var(--font-mono); font-weight: 600; color: var(--fg); }
+.status { margin: 6px 0 0; font-weight: 600; font-size: 14px; }
+.status.got { color: var(--foil-text); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fig { margin: 0; border: 1px solid var(--line); border-radius: 12px; padding: 8px; display: grid; gap: 4px; justify-items: center; background: var(--bg); position: relative; min-height: 138px; align-content: center; }
+.fig img { width: 100%; max-width: 130px; height: auto; aspect-ratio: 1; object-fit: contain; }
+.fig figcaption { font-size: 12px; color: var(--fg-dim); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.fig.on { border-color: var(--foil-b); background: var(--foil-bg); }
+.fig.on figcaption { color: var(--foil-text); }
+.fig.broken img { display: none; }
+.cta { width: 100%; border: 0; border-radius: 10px; padding: 11px 14px; font-weight: 600; background: var(--accent); color: var(--accent-ink); }
+.cta.on { background: var(--surface-2); color: var(--fg); border: 1px solid var(--line); }
+.games h3 { margin: 0 0 8px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-dim); }
+.gen { margin-bottom: 10px; }
+.gen h4 { margin: 0 0 5px; font-size: 12.5px; font-weight: 600; }
+.gchips { display: flex; flex-wrap: wrap; gap: 5px; }
+.g { font-size: 12.5px; border-radius: 7px; padding: 3px 8px; border: 1px dashed var(--line); color: var(--fg-dim); }
+.g.yes { border: 1px solid var(--foil-b); background: var(--foil-bg); color: var(--foil-text); font-weight: 600; }
+.g.na { opacity: .5; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--fg-dim); margin: 6px 0 10px; }
+.legend .g { display: inline-block; padding: 1px 7px; }
+.gnote { font-size: 12.5px; color: var(--fg-dim); margin: 0 0 10px; }
+
+.fcol { display: grid; gap: 10px; min-width: 0; }
+.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; width: fit-content; }
+.toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+.diag { color: var(--fg-dim); font-size: 12.5px; }
+.diag summary { cursor: pointer; font-weight: 600; }
+.diag p { margin: 8px 0 0; overflow-wrap: anywhere; }
+.diag .m { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6; }
+
+/* Pied de page */
+.foot { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; color: var(--fg-dim); font-size: 12.5px; }
+.foot button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 600; font-size: 13px; }
+.foot .credit { flex-basis: 100%; }
+
+@media (max-width: 899px) {
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .head { grid-template-columns: 1fr; align-items: start; }
+  .frow { grid-template-columns: 1fr; }
+  .detail {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 20;
+    border-radius: 16px 16px 0 0; max-height: 78vh; overflow-y: auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, .25); transform: translateY(110%); transition: transform .22s ease;
+    visibility: hidden;
+  }
+  .detail[data-open="true"] { transform: none; visibility: visible; }
+  .detail .close { display: block; justify-self: end; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .open, .bar > i, .detail { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <div>
+      <h1>Pokédex <span class="foil">Shiny</span></h1>
+      <p class="sub" id="sub"></p>
+    </div>
+    <div class="score">
+      <div class="langrow"><label for="lang" id="t-lang"></label><select id="lang"></select></div>
+      <div class="prog"><div class="pl"><span id="t-dex"></span><b><span id="n-dex">0</span> / <span id="n-dex-all">0</span></b></div><div class="bar dexbar"><i id="bar-dex"></i></div></div>
+      <div class="prog" aria-live="polite"><div class="pl"><span id="t-shiny"></span><b><span id="n-got">0</span> / <span id="n-all">0</span></b></div><div class="bar"><i id="bar"></i></div></div>
+    </div>
+  </header>
+
+  <div class="loader" id="loader" hidden>
+    <span id="loader-text"></span>
+    <div class="bar"><i id="loader-bar"></i></div>
+  </div>
+  <div class="err" id="err" hidden><span id="err-text"></span><button type="button" id="retry"></button></div>
+
+  <section class="gens" aria-labelledby="l-gens">
+    <h2 id="l-gens"></h2>
+    <div class="gcards" id="gens"></div>
+  </section>
+
+  <section class="filters">
+    <div class="frow"><div class="flabel" id="l-gen"></div><div class="chips" id="f-gen" role="group" aria-labelledby="l-gen"></div></div>
+    <div class="frow"><div class="flabel" id="l-cat"></div><div class="chips" id="f-cat" role="group" aria-labelledby="l-cat"></div></div>
+    <div class="frow"><div class="flabel" id="l-form"></div><div class="fcol"><div class="chips" id="f-form" role="group" aria-labelledby="l-form"></div>
+      <label class="toggle"><input type="checkbox" id="show-mega" checked><span id="t-showmega"></span></label></div></div>
+    <div class="frow"><div class="flabel" id="l-st"></div><div class="chips" id="f-st" role="group" aria-labelledby="l-st"></div></div>
+    <div class="frow"><label class="flabel" for="q" id="l-q"></label><input class="search" id="q" type="search" autocomplete="off"></div>
+  </section>
+
+  <div class="main">
+    <section>
+      <div class="meta" id="count"></div>
+      <ul class="grid" id="grid"></ul>
+      <div class="empty" id="empty" hidden><span id="empty-text"></span><br><button type="button" id="reset"></button></div>
+    </section>
+    <aside class="detail" id="detail"></aside>
+  </div>
+
+  <details class="diag" id="diag">
+    <summary>Debug · forms (kept as "other" / excluded)</summary>
+    <div id="diag-body"></div>
+  </details>
+
+  <footer class="foot">
+    <button type="button" id="b-export"></button>
+    <button type="button" id="b-import"></button>
+    <button type="button" id="b-refresh"></button>
+    <input type="file" id="file" accept="application/json,.json" hidden>
+    <span class="credit">Data &amp; sprites: PokeAPI (pokeapi.co) · github.com/PokeAPI/sprites</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Constantes ----------
+  var API = "https://pokeapi.co/api/v2";
+  var SPR = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/";
+  var CACHE_KEY = "pokedex-shiny.cache.v3";
+  var CAUGHT_KEY = "pokedex-shiny.caught.v2";
+  var LANG_KEY = "pokedex-shiny.lang";
+
+  // Langues des jeux (codes PokeAPI) et nom de chaque langue dans sa propre langue
+  var LANGS = [
+    ["fr", "Français"], ["en", "English"], ["de", "Deutsch"], ["es", "Español"], ["it", "Italiano"],
+    ["ja", "日本語"], ["ja-Hrkt", "日本語 (かな)"], ["ko", "한국어"], ["zh-Hans", "简体中文"], ["zh-Hant", "繁體中文"]
+  ];
+  var KEEP = LANGS.map(function (l) { return l[0]; });
+
+  // Jeux sans shiny, ou sans pokédex exploitable, et contenus additionnels fusionnés avec leur jeu
+  var SKIP_GROUPS = ["colosseum", "xd"];
+  var PARENT = {
+    "the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield",
+    "the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet"
+  };
+
+  // ---------- Textes de l'interface ----------
+  var T = {
+    fr: { sub: "Ta collection de Pokémon chromatiques. Marque un Pokémon quand tu as obtenu son shiny.", shiny: "shiny", gen: "Génération", cat: "Catégorie", st: "Statut", q: "Recherche", qph: "Nom ou numéro", allF: "Toutes", allM: "Tous", leg: "Légendaires", legS: "Légendaire", myth: "Fabuleux", mythS: "Fabuleux", got: "Déjà obtenus", missing: "Non obtenus", count: "{n} Pokémon affichés sur {t}", reset: "Réinitialiser les filtres", empty: "Aucun Pokémon ne correspond à ces filtres.", pick: "Choisis un Pokémon dans la liste pour voir sa fiche et les jeux où son shiny peut exister.", close: "Fermer", gotS: "Shiny obtenu", notS: "Shiny pas encore obtenu", mark: "Marquer comme obtenu en shiny", unmark: "Retirer de ma collection", gamesH: "Jeux où le shiny existe", avail: "Dans le Pokédex du jeu", unk: "Absent du Pokédex du jeu", gnote: "Indicatif : d'après le Pokédex régional de chaque jeu dans PokeAPI. Les Pokémon verrouillés shiny et ceux obtenus uniquement par transfert ne sont pas distingués.", normal: "Normal", shinyL: "Shiny", load: "Chargement des données PokeAPI… {n}/{t}", loadGames: "Chargement des jeux…", retry: "Réessayer", err: "PokeAPI est injoignable. Vérifie ta connexion internet.", exp: "Exporter ma collection", imp: "Importer", refresh: "Actualiser les données", lang: "Langue", form: "Formes", base: "Forme de base", fAlola: "Alola", fGalar: "Galar", fHisui: "Hisui", fPaldea: "Paldea", fMega: "Méga", fGmax: "Gigamax", fOther: "Autres formes", showMega: "Afficher les Méga-évolutions et Gigamax", dexL: "Pokédex", genProg: "Progression par génération", capT: "Marquer comme capturé", uncapT: "Retirer des capturés", capS: "Capturé (pas encore shiny)", capD: "Marquer comme capturé", uncapD: "Retirer des capturés", capLock: "Un shiny obtenu compte déjà comme capturé", fNot: "Pas capturés", fCap: "Capturés", fShinyGot: "Shiny obtenus", fShinyMiss: "Shiny manquants", exT: "Exclure ce Pokémon", unT: "Remettre dans ma liste", exD: "Exclure de ma collection", unD: "Remettre dans ma collection", exS: "Exclu : ne compte pas dans ta progression", exC: "Exclus", gnoteF: "Pour les formes alternatives, c'est une estimation à partir de l'espèce de base et de la génération où la forme apparaît." },
+    en: { sub: "Your collection of shiny Pokémon. Mark a Pokémon once you have its shiny.", shiny: "shiny", gen: "Generation", cat: "Category", st: "Status", q: "Search", qph: "Name or number", allF: "All", allM: "All", leg: "Legendary", legS: "Legendary", myth: "Mythical", mythS: "Mythical", got: "Obtained", missing: "Not obtained", count: "{n} of {t} Pokémon shown", reset: "Reset filters", empty: "No Pokémon match these filters.", pick: "Pick a Pokémon to see its details and the games where its shiny can exist.", close: "Close", gotS: "Shiny obtained", notS: "Shiny not obtained yet", mark: "Mark shiny as obtained", unmark: "Remove from my collection", gamesH: "Games where shiny exists", avail: "In the game's Pokédex", unk: "Not in the game's Pokédex", gnote: "Indicative: based on each game's regional Pokédex from PokeAPI. Shiny-locked Pokémon and transfer-only Pokémon are not distinguished.", normal: "Normal", shinyL: "Shiny", load: "Loading PokeAPI data… {n}/{t}", loadGames: "Loading games…", retry: "Retry", err: "Could not reach PokeAPI. Check your internet connection.", exp: "Export my collection", imp: "Import", refresh: "Refresh data", lang: "Language", form: "Forms", base: "Base form", fAlola: "Alolan", fGalar: "Galarian", fHisui: "Hisuian", fPaldea: "Paldean", fMega: "Mega", fGmax: "Gigantamax", fOther: "Other forms", showMega: "Show Mega Evolutions and Gigantamax", dexL: "Pokédex", genProg: "Progress by generation", capT: "Mark as caught", uncapT: "Remove from caught", capS: "Caught (no shiny yet)", capD: "Mark as caught", uncapD: "Remove from caught", capLock: "An obtained shiny already counts as caught", fNot: "Not caught", fCap: "Caught", fShinyGot: "Shiny obtained", fShinyMiss: "Shiny missing", exT: "Exclude this Pokémon", unT: "Put back in my list", exD: "Exclude from my collection", unD: "Put back in my collection", exS: "Excluded: not counted in your progress", exC: "Excluded", gnoteF: "For alternate forms, this is an estimate based on the base species and the generation the form was introduced." },
+    de: { sub: "Deine Sammlung schillernder Pokémon. Markiere ein Pokémon, sobald du sein Shiny hast.", shiny: "Shiny", gen: "Generation", cat: "Kategorie", st: "Status", q: "Suche", qph: "Name oder Nummer", allF: "Alle", allM: "Alle", leg: "Legendäre", legS: "Legendär", myth: "Mysteriöse", mythS: "Mysteriös", got: "Erhalten", missing: "Nicht erhalten", count: "{n} von {t} Pokémon angezeigt", reset: "Filter zurücksetzen", empty: "Kein Pokémon entspricht diesen Filtern.", pick: "Wähle ein Pokémon, um Details und die Spiele zu sehen, in denen sein Shiny existieren kann.", close: "Schließen", gotS: "Shiny erhalten", notS: "Shiny noch nicht erhalten", mark: "Shiny als erhalten markieren", unmark: "Aus meiner Sammlung entfernen", gamesH: "Spiele mit Shiny", avail: "Im Pokédex des Spiels", unk: "Nicht im Pokédex des Spiels", gnote: "Richtwert: basiert auf dem regionalen Pokédex jedes Spiels aus PokeAPI. Shiny-gesperrte und nur per Transfer erhältliche Pokémon werden nicht unterschieden.", normal: "Normal", shinyL: "Shiny", load: "PokeAPI-Daten werden geladen… {n}/{t}", loadGames: "Spiele werden geladen…", retry: "Erneut versuchen", err: "PokeAPI ist nicht erreichbar. Prüfe deine Internetverbindung.", exp: "Sammlung exportieren", imp: "Importieren", refresh: "Daten aktualisieren", lang: "Sprache", form: "Formen", base: "Basisform", fAlola: "Alola", fGalar: "Galar", fHisui: "Hisui", fPaldea: "Paldea", fMega: "Mega", fGmax: "Gigadynamax", fOther: "Andere Formen", showMega: "Mega-Entwicklungen und Gigadynamax anzeigen", dexL: "Pokédex", genProg: "Fortschritt nach Generation", capT: "Als gefangen markieren", uncapT: "Aus Gefangenen entfernen", capS: "Gefangen (noch kein Shiny)", capD: "Als gefangen markieren", uncapD: "Aus Gefangenen entfernen", capLock: "Ein erhaltenes Shiny zählt bereits als gefangen", fNot: "Nicht gefangen", fCap: "Gefangen", fShinyGot: "Shiny erhalten", fShinyMiss: "Shiny fehlt", exT: "Dieses Pokémon ausschließen", unT: "Zurück in meine Liste", exD: "Aus meiner Sammlung ausschließen", unD: "Zurück in meine Sammlung", exS: "Ausgeschlossen: zählt nicht zum Fortschritt", exC: "Ausgeschlossen", gnoteF: "Bei alternativen Formen ist dies eine Schätzung anhand der Basisart und der Generation, in der die Form eingeführt wurde." },
+    es: { sub: "Tu colección de Pokémon variocolor. Marca un Pokémon cuando consigas su shiny.", shiny: "shiny", gen: "Generación", cat: "Categoría", st: "Estado", q: "Búsqueda", qph: "Nombre o número", allF: "Todas", allM: "Todos", leg: "Legendarios", legS: "Legendario", myth: "Singulares", mythS: "Singular", got: "Conseguidos", missing: "Sin conseguir", count: "{n} de {t} Pokémon mostrados", reset: "Restablecer filtros", empty: "Ningún Pokémon coincide con estos filtros.", pick: "Elige un Pokémon para ver su ficha y los juegos donde su shiny puede existir.", close: "Cerrar", gotS: "Shiny conseguido", notS: "Shiny aún sin conseguir", mark: "Marcar shiny como conseguido", unmark: "Quitar de mi colección", gamesH: "Juegos con shiny", avail: "En la Pokédex del juego", unk: "No está en la Pokédex del juego", gnote: "Orientativo: según la Pokédex regional de cada juego en PokeAPI. No se distingue a los Pokémon con shiny bloqueado ni a los que solo se obtienen por transferencia.", normal: "Normal", shinyL: "Shiny", load: "Cargando datos de PokeAPI… {n}/{t}", loadGames: "Cargando juegos…", retry: "Reintentar", err: "No se puede acceder a PokeAPI. Comprueba tu conexión a internet.", exp: "Exportar mi colección", imp: "Importar", refresh: "Actualizar datos", lang: "Idioma", form: "Formas", base: "Forma base", fAlola: "Alola", fGalar: "Galar", fHisui: "Hisui", fPaldea: "Paldea", fMega: "Mega", fGmax: "Gigamax", fOther: "Otras formas", showMega: "Mostrar Megaevoluciones y Gigamax", dexL: "Pokédex", genProg: "Progreso por generación", capT: "Marcar como capturado", uncapT: "Quitar de capturados", capS: "Capturado (aún sin shiny)", capD: "Marcar como capturado", uncapD: "Quitar de capturados", capLock: "Un shiny conseguido ya cuenta como capturado", fNot: "Sin capturar", fCap: "Capturados", fShinyGot: "Shiny conseguidos", fShinyMiss: "Shiny pendientes", exT: "Excluir este Pokémon", unT: "Volver a mi lista", exD: "Excluir de mi colección", unD: "Volver a mi colección", exS: "Excluido: no cuenta en tu progreso", exC: "Excluidos", gnoteF: "En las formas alternativas es una estimación basada en la especie base y la generación en que apareció la forma." },
+    it: { sub: "La tua collezione di Pokémon cromatici. Segna un Pokémon quando ottieni il suo shiny.", shiny: "shiny", gen: "Generazione", cat: "Categoria", st: "Stato", q: "Ricerca", qph: "Nome o numero", allF: "Tutte", allM: "Tutti", leg: "Leggendari", legS: "Leggendario", myth: "Misteriosi", mythS: "Misterioso", got: "Ottenuti", missing: "Non ottenuti", count: "{n} Pokémon mostrati su {t}", reset: "Reimposta i filtri", empty: "Nessun Pokémon corrisponde a questi filtri.", pick: "Scegli un Pokémon per vedere la sua scheda e i giochi in cui il suo shiny può esistere.", close: "Chiudi", gotS: "Shiny ottenuto", notS: "Shiny non ancora ottenuto", mark: "Segna lo shiny come ottenuto", unmark: "Rimuovi dalla mia collezione", gamesH: "Giochi con shiny", avail: "Nel Pokédex del gioco", unk: "Non nel Pokédex del gioco", gnote: "Indicativo: basato sul Pokédex regionale di ogni gioco da PokeAPI. I Pokémon con shiny bloccato e quelli ottenibili solo tramite trasferimento non sono distinti.", normal: "Normale", shinyL: "Shiny", load: "Caricamento dati PokeAPI… {n}/{t}", loadGames: "Caricamento giochi…", retry: "Riprova", err: "Impossibile raggiungere PokeAPI. Controlla la connessione a internet.", exp: "Esporta la mia collezione", imp: "Importa", refresh: "Aggiorna i dati", lang: "Lingua", form: "Forme", base: "Forma base", fAlola: "Alola", fGalar: "Galar", fHisui: "Hisui", fPaldea: "Paldea", fMega: "Mega", fGmax: "Gigamax", fOther: "Altre forme", showMega: "Mostra Megaevoluzioni e Gigamax", dexL: "Pokédex", genProg: "Progressi per generazione", capT: "Segna come catturato", uncapT: "Rimuovi dai catturati", capS: "Catturato (ancora senza shiny)", capD: "Segna come catturato", uncapD: "Rimuovi dai catturati", capLock: "Uno shiny ottenuto conta già come catturato", fNot: "Non catturati", fCap: "Catturati", fShinyGot: "Shiny ottenuti", fShinyMiss: "Shiny mancanti", exT: "Escludi questo Pokémon", unT: "Rimetti nella mia lista", exD: "Escludi dalla mia collezione", unD: "Rimetti nella mia collezione", exS: "Escluso: non conta nei tuoi progressi", exC: "Esclusi", gnoteF: "Per le forme alternative è una stima basata sulla specie base e sulla generazione in cui la forma è apparsa." },
+    ja: { sub: "色違いポケモンのコレクション。色違いを手に入れたらチェックしよう。", shiny: "色違い", gen: "世代", cat: "分類", st: "状態", q: "検索", qph: "名前または番号", allF: "すべて", allM: "すべて", leg: "伝説", legS: "伝説", myth: "幻", mythS: "幻", got: "入手済み", missing: "未入手", count: "{t}匹中{n}匹を表示", reset: "フィルターをリセット", empty: "条件に合うポケモンがいません。", pick: "ポケモンを選ぶと、詳細と色違いが存在しうるソフトが表示されます。", close: "閉じる", gotS: "色違いを入手済み", notS: "色違いは未入手", mark: "色違いを入手済みにする", unmark: "コレクションから外す", gamesH: "色違いが存在するソフト", avail: "ソフトの図鑑に登場", unk: "ソフトの図鑑に未登場", gnote: "目安：PokeAPIの各ソフトの地方図鑑に基づきます。色違い固定不可のポケモンや、通信でのみ入手できるポケモンは区別していません。", normal: "通常", shinyL: "色違い", load: "PokeAPIのデータを読み込み中… {n}/{t}", loadGames: "ソフトを読み込み中…", retry: "再試行", err: "PokeAPIに接続できません。インターネット接続を確認してください。", exp: "コレクションを書き出す", imp: "読み込む", refresh: "データを更新", lang: "言語", form: "姿", base: "通常の姿", fAlola: "アローラ", fGalar: "ガラル", fHisui: "ヒスイ", fPaldea: "パルデア", fMega: "メガ", fGmax: "キョダイマックス", fOther: "その他の姿", showMega: "メガシンカとキョダイマックスを表示", dexL: "図鑑", genProg: "世代ごとの進捗", capT: "捕獲済みにする", uncapT: "捕獲済みから外す", capS: "捕獲済み（色違いはまだ）", capD: "捕獲済みにする", uncapD: "捕獲済みから外す", capLock: "入手済みの色違いは捕獲済みとして数えます", fNot: "未捕獲", fCap: "捕獲済み", fShinyGot: "色違い入手済み", fShinyMiss: "色違い未入手", exT: "このポケモンを除外", unT: "リストに戻す", exD: "コレクションから除外", unD: "コレクションに戻す", exS: "除外中：進捗に含まれません", exC: "除外", gnoteF: "別の姿については、基となる種類と、その姿が登場した世代からの推定です。" },
+    ko: { sub: "이로치 포켓몬 컬렉션입니다. 이로치를 얻으면 체크하세요.", shiny: "이로치", gen: "세대", cat: "분류", st: "상태", q: "검색", qph: "이름 또는 번호", allF: "전체", allM: "전체", leg: "전설", legS: "전설", myth: "환상", mythS: "환상", got: "획득함", missing: "미획득", count: "{t}마리 중 {n}마리 표시", reset: "필터 초기화", empty: "조건에 맞는 포켓몬이 없습니다.", pick: "포켓몬을 선택하면 상세 정보와 이로치가 존재할 수 있는 게임을 볼 수 있습니다.", close: "닫기", gotS: "이로치 획득", notS: "이로치 미획득", mark: "이로치 획득으로 표시", unmark: "컬렉션에서 제거", gamesH: "이로치가 존재하는 게임", avail: "게임 도감에 있음", unk: "게임 도감에 없음", gnote: "참고용: PokeAPI의 게임별 지방 도감을 기준으로 합니다. 이로치 고정 불가 포켓몬과 통신으로만 얻는 포켓몬은 구분하지 않습니다.", normal: "일반", shinyL: "이로치", load: "PokeAPI 데이터 불러오는 중… {n}/{t}", loadGames: "게임 불러오는 중…", retry: "다시 시도", err: "PokeAPI에 연결할 수 없습니다. 인터넷 연결을 확인하세요.", exp: "컬렉션 내보내기", imp: "가져오기", refresh: "데이터 새로고침", lang: "언어", form: "폼", base: "기본 폼", fAlola: "알로라", fGalar: "가라르", fHisui: "히스이", fPaldea: "팔데아", fMega: "메가", fGmax: "거다이맥스", fOther: "기타 폼", showMega: "메가진화와 거다이맥스 표시", dexL: "도감", genProg: "세대별 진행률", capT: "포획함으로 표시", uncapT: "포획에서 제거", capS: "포획함 (이로치 아직)", capD: "포획함으로 표시", uncapD: "포획에서 제거", capLock: "이로치를 얻으면 이미 포획한 것으로 계산됩니다", fNot: "미포획", fCap: "포획함", fShinyGot: "이로치 획득", fShinyMiss: "이로치 미획득", exT: "이 포켓몬 제외", unT: "목록으로 되돌리기", exD: "컬렉션에서 제외", unD: "컬렉션으로 되돌리기", exS: "제외됨: 진행률에 포함되지 않습니다", exC: "제외됨", gnoteF: "다른 폼은 기본 종과 해당 폼이 등장한 세대를 기준으로 한 추정입니다." },
+    "zh-Hans": { sub: "你的闪光宝可梦收藏。获得闪光后就标记它。", shiny: "闪光", gen: "世代", cat: "分类", st: "状态", q: "搜索", qph: "名称或编号", allF: "全部", allM: "全部", leg: "传说", legS: "传说", myth: "幻之", mythS: "幻之", got: "已获得", missing: "未获得", count: "显示 {n} / {t} 只宝可梦", reset: "重置筛选", empty: "没有符合条件的宝可梦。", pick: "选择一只宝可梦，查看详情以及其闪光可能存在的游戏。", close: "关闭", gotS: "已获得闪光", notS: "尚未获得闪光", mark: "标记为已获得闪光", unmark: "从收藏中移除", gamesH: "存在闪光的游戏", avail: "在该游戏图鉴中", unk: "不在该游戏图鉴中", gnote: "仅供参考：依据 PokeAPI 中各游戏的地区图鉴。未区分闪光锁定的宝可梦和只能通过传送获得的宝可梦。", normal: "普通", shinyL: "闪光", load: "正在加载 PokeAPI 数据… {n}/{t}", loadGames: "正在加载游戏…", retry: "重试", err: "无法连接 PokeAPI。请检查网络连接。", exp: "导出我的收藏", imp: "导入", refresh: "刷新数据", lang: "语言", form: "形态", base: "基础形态", fAlola: "阿罗拉", fGalar: "伽勒尔", fHisui: "洗翠", fPaldea: "帕底亚", fMega: "超级", fGmax: "超极巨化", fOther: "其他形态", showMega: "显示超级进化和超极巨化", dexL: "图鉴", genProg: "各世代进度", capT: "标记为已捕获", uncapT: "从已捕获中移除", capS: "已捕获（尚无闪光）", capD: "标记为已捕获", uncapD: "从已捕获中移除", capLock: "已获得的闪光已算作捕获", fNot: "未捕获", fCap: "已捕获", fShinyGot: "已获得闪光", fShinyMiss: "缺少闪光", exT: "排除这只宝可梦", unT: "放回我的列表", exD: "从收藏中排除", unD: "放回我的收藏", exS: "已排除：不计入进度", exC: "已排除", gnoteF: "其他形态为根据基础宝可梦和该形态出现的世代作出的估计。" },
+    "zh-Hant": { sub: "你的閃光寶可夢收藏。獲得閃光後就標記它。", shiny: "閃光", gen: "世代", cat: "分類", st: "狀態", q: "搜尋", qph: "名稱或編號", allF: "全部", allM: "全部", leg: "傳說", legS: "傳說", myth: "幻", mythS: "幻", got: "已獲得", missing: "未獲得", count: "顯示 {n} / {t} 隻寶可夢", reset: "重設篩選", empty: "沒有符合條件的寶可夢。", pick: "選擇一隻寶可夢，查看詳情以及其閃光可能存在的遊戲。", close: "關閉", gotS: "已獲得閃光", notS: "尚未獲得閃光", mark: "標記為已獲得閃光", unmark: "從收藏中移除", gamesH: "存在閃光的遊戲", avail: "在該遊戲圖鑑中", unk: "不在該遊戲圖鑑中", gnote: "僅供參考：依據 PokeAPI 中各遊戲的地區圖鑑。未區分閃光鎖定的寶可夢和只能透過傳送獲得的寶可夢。", normal: "普通", shinyL: "閃光", load: "正在載入 PokeAPI 資料… {n}/{t}", loadGames: "正在載入遊戲…", retry: "重試", err: "無法連線 PokeAPI。請檢查網路連線。", exp: "匯出我的收藏", imp: "匯入", refresh: "重新整理資料", lang: "語言", form: "形態", base: "基礎形態", fAlola: "阿羅拉", fGalar: "伽勒爾", fHisui: "洗翠", fPaldea: "帕底亞", fMega: "超級", fGmax: "超極巨化", fOther: "其他形態", showMega: "顯示超級進化和超極巨化", dexL: "圖鑑", genProg: "各世代進度", capT: "標記為已捕獲", uncapT: "從已捕獲中移除", capS: "已捕獲（尚無閃光）", capD: "標記為已捕獲", uncapD: "從已捕獲中移除", capLock: "已獲得的閃光已算作捕獲", fNot: "未捕獲", fCap: "已捕獲", fShinyGot: "已獲得閃光", fShinyMiss: "缺少閃光", exT: "排除這隻寶可夢", unT: "放回我的清單", exD: "從收藏中排除", unD: "放回我的收藏", exS: "已排除：不計入進度", exC: "已排除", gnoteF: "其他形態為根據基礎寶可夢和該形態出現的世代作出的估計。" }
+  };
+
+  // ---------- État ----------
+  var $ = function (id) { return document.getElementById(id); };
+  var lang = pickLang();
+  var S = {};            // espèces : id -> {id, s, g, l, m, n}
+  var META = null;       // jeux : [{k, g, o, v:[{id,n}], d:[ids], set}]
+  var total = 0;
+  var complete = false;
+  var caught = new Set();
+  var selected = null;
+  var f = { gen: 0, cat: "all", form: "all", st: "all", q: "" };
+  var renderTimer = 0;
+  var doneCount = 0;
+  var exList = [];       // variantes écartées (pour le panneau de diagnostic)
+  var SHOWMEGA_KEY = "pokedex-shiny.showmega";
+  var EXCLUDED_KEY = "pokedex-shiny.excluded.v1";
+  var excluded = new Set();   // Pokémon que l'utilisateur ne veut pas collectionner
+  var OWNED_KEY = "pokedex-shiny.owned.v1";
+  var owned = new Set();      // Pokédex normal : Pokémon capturés (un shiny obtenu compte aussi comme capturé)
+  var showMega = (function () { try { return localStorage.getItem(SHOWMEGA_KEY) !== "0"; } catch (e) { return true; } })();
+
+  function t(k) {
+    var code = lang === "ja-Hrkt" ? "ja" : lang;
+    var d = T[code] || T.en;
+    return d[k] !== undefined ? d[k] : T.en[k];
+  }
+  function pickLang() {
+    try { var s = localStorage.getItem(LANG_KEY); if (s && KEEP.indexOf(s) >= 0) return s; } catch (e) {}
+    var n = (navigator.language || "en").toLowerCase();
+    if (n.indexOf("zh") === 0) return /tw|hk|mo|hant/.test(n) ? "zh-Hant" : "zh-Hans";
+    var base = n.split("-")[0];
+    return KEEP.indexOf(base) >= 0 ? base : "en";
+  }
+
+  // ---------- Stockage local ----------
+  function lsGet(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function saveCaught() { lsSet(CAUGHT_KEY, Array.from(caught)); }
+  function saveExcluded() { lsSet(EXCLUDED_KEY, Array.from(excluded)); }
+  function saveOwned() { lsSet(OWNED_KEY, Array.from(owned)); }
+  function cacheWrite() { lsSet(CACHE_KEY, { v: 3, ex: exList, total: total, complete: complete, species: S, meta: META ? META.map(strip) : null }); }
+  function strip(g) { return { k: g.k, g: g.g, o: g.o, v: g.v, d: g.d }; }
+
+  var saved = lsGet(CAUGHT_KEY) || lsGet("pokedex-shiny.caught.v1");
+  if (Array.isArray(saved)) caught = new Set(saved.filter(function (n) { return Number.isInteger(n) && n > 0; }));
+  var savedEx = lsGet(EXCLUDED_KEY);
+  if (Array.isArray(savedEx)) excluded = new Set(savedEx.filter(function (n) { return Number.isInteger(n) && n > 0; }));
+  var savedOw = lsGet(OWNED_KEY);
+  if (Array.isArray(savedOw)) owned = new Set(savedOw.filter(function (n) { return Number.isInteger(n) && n > 0; }));
+  var cached = lsGet(CACHE_KEY);
+  if (cached && cached.v === 3) {
+    S = cached.species || {}; total = cached.total || 0; complete = !!cached.complete; exList = cached.ex || [];
+    if (cached.meta) { META = cached.meta; META.forEach(function (g) { g.set = new Set(g.d); }); }
+  }
+
+  // ---------- Réseau ----------
+  function idFrom(url) { var m = String(url).match(/\/(\d+)\/?$/); return m ? Number(m[1]) : 0; }
+  async function getJSON(url, tries) {
+    tries = tries || 3;
+    for (var i = 0; i < tries; i++) {
+      try {
+        var r = await fetch(url);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return await r.json();
+      } catch (e) {
+        if (i === tries - 1) throw e;
+        await new Promise(function (res) { setTimeout(res, 400 * (i + 1)); });
+      }
+    }
+  }
+  async function pool(items, size, fn, fails) {
+    var i = 0;
+    var workers = [];
+    for (var w = 0; w < size; w++) {
+      workers.push((async function () {
+        while (i < items.length) {
+          var it = items[i++];
+          try { await fn(it); } catch (e) { if (fails) fails.push(it); }
+        }
+      })());
+    }
+    await Promise.all(workers);
+  }
+
+  // Formes alternatives : on écarte les variantes de combat, de costume ou de boss qui ne se collectionnent pas
+  var EXCL = {};
+  "totem cosplay rock belle pop phd libre cap starter bond ash zen blade school busted eternamax gulping gorging sunny rainy snowy sunshine hero terastal stellar meteor construct power 10 50 complete disguised pirouette hangry noice".split(" ").forEach(function (k) { EXCL[k] = 1; });
+  var REGION_GEN = { alola: 7, galar: 8, hisui: 8, paldea: 9 };
+
+  // Une espèce donne une entrée de base plus une entrée par forme alternative (id PokeAPI du Pokémon, 10001 et plus)
+  function compact(s) {
+    var n = {};
+    (s.names || []).forEach(function (x) { if (KEEP.indexOf(x.language.name) >= 0) n[x.language.name] = x.name; });
+    var gen = idFrom(s.generation.url), l = s.is_legendary ? 1 : 0, m = s.is_mythical ? 1 : 0;
+    var out = [{ id: s.id, b: s.id, s: s.name, g: gen, l: l, m: m, n: n, f: "", x: "", fg: 0 }];
+    if (s.name === "minior") return out;
+    (s.varieties || []).forEach(function (v) {
+      if (v.is_default) return;
+      var slug = v.pokemon.name, pid = idFrom(v.pokemon.url);
+      if (!pid) return;
+      var suffix = slug.indexOf(s.name + "-") === 0 ? slug.slice(s.name.length + 1) : slug;
+      var tk = suffix.split("-");
+      if (tk.some(function (x) { return EXCL[x]; })) { if (exList.indexOf(slug) < 0) exList.push(slug); return; }
+      var kind = "other", fg = 0;
+      for (var r in REGION_GEN) { if (tk.indexOf(r) >= 0) { kind = r; fg = REGION_GEN[r]; break; } }
+      if (kind === "other") {
+        if (tk.indexOf("mega") >= 0 || tk.indexOf("primal") >= 0) kind = "mega";
+        else if (tk.indexOf("gmax") >= 0) kind = "gmax";
+      }
+      out.push({ id: pid, b: s.id, s: slug, g: fg || gen, l: l, m: m, n: n, f: kind, x: suffix, fg: fg });
+    });
+    return out;
+  }
+
+  async function loadSpecies() {
+    $("err").hidden = true;
+    $("loader").hidden = false;
+    var list = await getJSON(API + "/pokemon-species?limit=5000");
+    var ids = list.results.map(function (r) { return idFrom(r.url); }).filter(Boolean).sort(function (a, b) { return a - b; });
+    total = ids.length;
+    var todo = ids.filter(function (id) { return !S[id]; });
+    var done = total - todo.length;
+    progress(done);
+    var fails = [];
+    await pool(todo, 16, async function (id) {
+      var s = await getJSON(API + "/pokemon-species/" + id);
+      compact(s).forEach(function (e) { S[e.id] = e; });
+      done++;
+      doneCount = done;
+      progress(done);
+      scheduleRender();
+      if (done % 150 === 0) cacheWrite();
+    }, fails);
+    complete = fails.length === 0;
+    cacheWrite();
+    renderDiag();
+    $("loader").hidden = true;
+    render();
+    if (!complete) showErr();
+  }
+  function progress(n) {
+    $("loader-text").textContent = t("load").replace("{n}", n).replace("{t}", total);
+    $("loader-bar").style.width = (total ? n / total * 100 : 0) + "%";
+  }
+  function showErr() { $("err-text").textContent = t("err"); $("retry").textContent = t("retry"); $("err").hidden = false; $("loader").hidden = true; }
+
+  async function loadMeta() {
+    if (META) return;
+    var vgl = await getJSON(API + "/version-group?limit=200");
+    var groups = [];
+    await pool(vgl.results, 8, async function (r) { groups.push(await getJSON(r.url)); });
+
+    var pdUrls = {};
+    groups.forEach(function (g) { g.pokedexes.forEach(function (p) { if (p.name !== "national") pdUrls[p.url] = 1; }); });
+    var pd = {};
+    await pool(Object.keys(pdUrls), 8, async function (u) {
+      var d = await getJSON(u);
+      pd[u] = d.pokemon_entries.map(function (e) { return idFrom(e.pokemon_species.url); });
+    });
+
+    var acc = {};
+    groups.forEach(function (g) {
+      var target = PARENT[g.name] || g.name;
+      acc[target] = acc[target] || {};
+      g.pokedexes.forEach(function (p) { (pd[p.url] || []).forEach(function (id) { acc[target][id] = 1; }); });
+    });
+
+    var usable = groups.filter(function (g) {
+      return !PARENT[g.name] && SKIP_GROUPS.indexOf(g.name) < 0 && idFrom(g.generation.url) >= 2;
+    });
+    var verUrls = {};
+    usable.forEach(function (g) { g.versions.forEach(function (v) { verUrls[v.url] = 1; }); });
+    var vnames = {};
+    await pool(Object.keys(verUrls), 8, async function (u) {
+      var v = await getJSON(u);
+      var n = {};
+      (v.names || []).forEach(function (x) { if (KEEP.indexOf(x.language.name) >= 0) n[x.language.name] = x.name; });
+      vnames[idFrom(u)] = { id: v.id, s: v.name, n: n };
+    });
+
+    META = usable.map(function (g) {
+      var d = Object.keys(acc[g.name] || {}).map(Number).sort(function (a, b) { return a - b; });
+      var vs = g.versions.map(function (v) { return vnames[idFrom(v.url)]; }).filter(Boolean);
+      return { k: g.name, g: idFrom(g.generation.url), o: g.order, v: vs, d: d, set: new Set(d) };
+    }).sort(function (a, b) { return a.o - b.o; });
+    cacheWrite();
+    renderDetail();
+  }
+
+  // ---------- Utilitaires d'affichage ----------
+  var SPARK = '<svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg>';
+  var CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  var BAN = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M6.4 17.6L17.6 6.4"/></svg>';
+  var BALL = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M4 12h5M15 12h5"/><circle cx="12" cy="12" r="2.4"/></svg>';
+  var STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 6.1L20 11l-6.1 1.9L12 19l-1.9-6.1L4 11l6.1-1.9z"/></svg>';
+  function pad(n) { return String(n).padStart(3, "0"); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function norm(s) { return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+  function roman(n) {
+    var m = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]], o = "";
+    m.forEach(function (x) { while (n >= x[0]) { o += x[1]; n -= x[0]; } });
+    return o;
+  }
+  function pick(n, fallbackName) {
+    var alt = lang === "ja" ? n["ja-Hrkt"] : lang === "ja-Hrkt" ? n["ja"] : null;
+    return n[lang] || alt || n.en || fallbackName;
+  }
+  function nameOf(p) { return pick(p.n, p.s); }
+  function cat(p) { return p.l ? "leg" : p.m ? "myth" : ""; }
+  function dexList() { return Object.keys(S).map(function (k) { return S[k]; }).filter(function (p) { return showMega || (p.f !== "mega" && p.f !== "gmax"); }).sort(function (a, b) { return (a.b - b.b) || (a.id - b.id); }); }
+
+  // Formes alternatives : catégories, libellés
+  var FORMS = ["alola", "galar", "hisui", "paldea", "mega", "gmax", "other"];
+  var FLBL = { alola: "fAlola", galar: "fGalar", hisui: "fHisui", paldea: "fPaldea", mega: "fMega", gmax: "fGmax", other: "fOther" };
+  function title(tokens) { return tokens.map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(" "); }
+  function renderDiag() {
+    var other = Object.keys(S).map(function (k) { return S[k]; }).filter(function (p) { return p.f === "other"; })
+      .sort(function (a, b) { return (a.b - b.b) || (a.id - b.id); }).map(function (p) { return p.s; });
+    $("diag-body").innerHTML = '<p><b>other (' + other.length + ')</b></p><p class="m">' + esc(other.join(", ")) + "</p>" +
+      '<p><b>excluded (' + exList.length + ')</b></p><p class="m">' + esc(exList.slice().sort().join(", ")) + "</p>";
+  }
+  function formLabel(p) {
+    if (!p.f) return "";
+    var tk = p.x.split("-");
+    if (REGION_GEN[p.f]) {
+      var rest = tk.filter(function (x) { return x !== p.f; });
+      return t(FLBL[p.f]) + (rest.length ? " · " + title(rest) : "");
+    }
+    if (p.f === "mega") {
+      if (tk.indexOf("primal") >= 0) return title(tk);
+      var r2 = tk.filter(function (x) { return x !== "mega"; });
+      return t("fMega") + (r2.length ? " " + r2.join(" ").toUpperCase() : "");
+    }
+    if (p.f === "gmax") return t("fGmax");
+    return title(tk);
+  }
+  // Disponibilité d'une forme : estimée d'après l'espèce de base et la génération d'apparition de la forme
+  function avail(p, grp) {
+    if (!grp.set.has(p.b)) return false;
+    if (!p.f || p.f === "other") return true;
+    if (p.f === "mega") return /^(x-y|omega-ruby|lets-go)/.test(grp.k) || grp.k.indexOf("z-a") >= 0;
+    if (p.f === "gmax") return grp.k === "sword-shield";
+    if (p.f === "hisui") return grp.k.indexOf("legends-arceus") >= 0 || grp.g >= 9;
+    return grp.g >= p.fg;
+  }
+
+  // ---------- Rendu ----------
+  function chip(group, val, label, count) {
+    var on = String(f[group]) === String(val);
+    return '<button type="button" class="chip" data-group="' + group + '" data-val="' + val + '" aria-pressed="' + on + '">' +
+      esc(label) + (count ? ' <span class="c">' + count + '</span>' : "") + "</button>";
+  }
+  function hasN(id) { return owned.has(id) || caught.has(id); }
+  function pct(n, total) { return total ? Math.floor(n * 100 / total) : 0; }
+  // Progression par génération : Pokédex (capturés, shiny compris) et Shiny, hors Pokémon exclus
+  function renderGens(list) {
+    var by = {};
+    list.forEach(function (p) {
+      var o = by[p.g] || (by[p.g] = { n: 0, d: 0, s: 0 });
+      o.n++; if (hasN(p.id)) o.d++; if (caught.has(p.id)) o.s++;
+    });
+    $("gens").innerHTML = Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (g) {
+      var o = by[g], pd = pct(o.d, o.n), ps = pct(o.s, o.n);
+      return '<button type="button" class="gc" data-act="gen" data-gen="' + g + '" aria-pressed="' + (f.gen === g) + '">' +
+        '<span class="gh">' + esc(t("gen")) + " " + roman(g) + "</span>" +
+        '<span class="gr"><span>' + esc(t("dexL")) + " · " + o.d + "/" + o.n + "</span><b>" + pd + '%</b><span class="bar dexbar"><i style="width:' + pd + '%"></i></span></span>' +
+        '<span class="gr"><span>' + esc(t("shinyL")) + " · " + o.s + "/" + o.n + "</span><b>" + ps + '%</b><span class="bar"><i style="width:' + ps + '%"></i></span></span></button>';
+    }).join("");
+  }
+  function renderFilters(list, exCount) {
+    var gens = {}, got = 0, dexc = 0, leg = 0, tleg = 0, myth = 0, tmyth = 0;
+    list.forEach(function (p) {
+      var g = caught.has(p.id);
+      if (hasN(p.id)) dexc++;
+      gens[p.g] = gens[p.g] || [0, 0]; gens[p.g][1]++; if (g) gens[p.g][0]++;
+      if (g) got++;
+      if (p.l) { tleg++; if (g) leg++; }
+      if (p.m) { tmyth++; if (g) myth++; }
+    });
+    $("f-gen").innerHTML = chip("gen", 0, t("allF")) +
+      Object.keys(gens).map(Number).sort(function (a, b) { return a - b; }).map(function (g) {
+        return chip("gen", g, roman(g), gens[g][0] + "/" + gens[g][1]);
+      }).join("");
+    $("f-cat").innerHTML = chip("cat", "all", t("allM")) +
+      chip("cat", "leg", t("leg"), leg + "/" + tleg) + chip("cat", "myth", t("myth"), myth + "/" + tmyth);
+    $("f-st").innerHTML = chip("st", "all", t("allM")) +
+      chip("st", "notcaught", t("fNot"), list.length - dexc) + chip("st", "caught", t("fCap"), dexc) +
+      chip("st", "got", t("fShinyGot"), got) + chip("st", "missing", t("fShinyMiss"), list.length - got) +
+      chip("st", "excluded", t("exC"), exCount);
+    var fc = {};
+    list.forEach(function (p) {
+      var k = p.f || "base";
+      fc[k] = fc[k] || [0, 0]; fc[k][1]++; if (caught.has(p.id)) fc[k][0]++;
+    });
+    $("f-form").innerHTML = chip("form", "all", t("allF")) +
+      (fc.base ? chip("form", "base", t("base"), fc.base[0] + "/" + fc.base[1]) : "") +
+      FORMS.filter(function (k) { return fc[k]; }).map(function (k) {
+        return chip("form", k, t(FLBL[k]), fc[k][0] + "/" + fc[k][1]);
+      }).join("");
+  }
+  function filtered(list) {
+    var q = norm(f.q.trim()).replace(/^#/, "");
+    return list.filter(function (p) {
+      if (f.gen && p.g !== f.gen) return false;
+      var c = cat(p);
+      if (f.cat !== "all" && c !== f.cat) return false;
+      if (f.form === "base" && p.f) return false;
+      if (f.form !== "all" && f.form !== "base" && p.f !== f.form) return false;
+      var g = caught.has(p.id);
+      if (f.st === "excluded") { if (!excluded.has(p.id)) return false; }
+      else if (excluded.has(p.id)) return false;
+      var dx = hasN(p.id);
+      if (f.st === "notcaught" && dx) return false;
+      if (f.st === "caught" && !dx) return false;
+      if (f.st === "got" && !g) return false;
+      if (f.st === "missing" && g) return false;
+      if (q) {
+        var hay = norm(nameOf(p)) + " " + norm(p.n.en || p.s);
+        if (hay.indexOf(q) < 0 && String(p.b).indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+  function tileHTML(p) {
+    var x = excluded.has(p.id), g = caught.has(p.id) && !x, nm = nameOf(p), c = cat(p);
+    var o = !x && !g && owned.has(p.id), dn = !x && hasN(p.id);
+    var src = SPR + (g ? "shiny/" : "") + p.id + ".png";
+    var fl = formLabel(p);
+    var label = nm + (fl ? " (" + fl + ")" : "") + " #" + p.b + " — " + (x ? t("exC") : g ? t("gotS") : o ? t("capS") : t("notS"));
+    return '<li class="tile' + (g ? " got" : "") + (o ? " own" : "") + (x ? " excl" : "") + (selected === p.id ? " sel" : "") + '" data-id="' + p.id + '">' +
+      '<button type="button" class="open" data-act="open" aria-label="' + esc(label) + '">' +
+      '<span class="no">#' + pad(p.b) + "</span>" +
+      '<span class="art"><span class="mono">' + esc(nm.charAt(0)) + '</span><img src="' + src + '" alt="" loading="lazy" width="84" height="84">' + SPARK + "</span>" +
+      '<span class="nm">' + esc(nm) + '</span><span class="tag">' + esc(fl || (c ? t(c === "leg" ? "legS" : "mythS") : "")) + "</span></button>" +
+      '<div class="acts">' +
+      '<button type="button" class="ab cap" data-act="cap"' + (g ? " disabled" : "") + ' aria-pressed="' + dn + '" aria-label="' + esc((dn ? t("uncapT") : t("capT")) + " : " + nm) + '" title="' + esc(g ? t("capLock") : dn ? t("uncapT") : t("capT")) + '">' + BALL + "</button>" +
+      '<button type="button" class="ab mark" data-act="mark" aria-pressed="' + g + '" aria-label="' + esc(t("mark") + " : " + nm) + '" title="' + esc(t("mark")) + '">' + STAR + "</button>" +
+      '<button type="button" class="ab exb" data-act="exclude" aria-pressed="' + x + '" aria-label="' + esc((x ? t("unT") : t("exT")) + " : " + nm) + '" title="' + esc(x ? t("unT") : t("exT")) + '">' + BAN + "</button></div></li>";
+  }
+  function render() {
+    var all = dexList();
+    var list = all.filter(function (p) { return !excluded.has(p.id); });   // ce que l'utilisateur veut attraper
+    var exCount = all.length - list.length;
+    var n = 0; list.forEach(function (p) { if (caught.has(p.id)) n++; });
+    $("n-got").textContent = n; $("n-all").textContent = list.length;
+    $("bar").style.width = (list.length ? n / list.length * 100 : 0) + "%";
+    var nd = 0; list.forEach(function (p) { if (hasN(p.id)) nd++; });
+    $("n-dex").textContent = nd; $("n-dex-all").textContent = list.length;
+    $("bar-dex").style.width = (list.length ? nd / list.length * 100 : 0) + "%";
+    renderGens(list);
+    renderFilters(list, exCount);
+    var shown = filtered(all);
+    var base = f.st === "excluded" ? exCount : list.length;
+    $("grid").innerHTML = shown.map(tileHTML).join("");
+    $("empty").hidden = shown.length > 0 || all.length === 0;
+    $("count").textContent = t("count").replace("{n}", shown.length).replace("{t}", base);
+  }
+  function scheduleRender() {
+    if (renderTimer) return;
+    renderTimer = setTimeout(function () { renderTimer = 0; render(); }, 350);
+  }
+
+  function gamesHTML(p) {
+    var out = '<div class="games"><h3>' + esc(t("gamesH")) + "</h3>";
+    if (!META) return out + '<p class="gnote">' + esc(t("loadGames")) + "</p></div>";
+    out += '<div class="legend"><span><span class="g yes">' + esc(t("avail")) + '</span></span><span><span class="g">' + esc(t("unk")) + "</span></span></div>";
+    out += '<p class="gnote">' + esc(t("gnote")) + "</p>";
+    if (p.f) out += '<p class="gnote">' + esc(t("gnoteF")) + "</p>";
+    var byGen = {};
+    META.forEach(function (g) { (byGen[g.g] = byGen[g.g] || []).push(g); });
+    Object.keys(byGen).map(Number).sort(function (a, b) { return a - b; }).forEach(function (gn) {
+      out += '<div class="gen"><h4>' + esc(t("gen")) + " " + roman(gn) + '</h4><div class="gchips">';
+      byGen[gn].forEach(function (grp) {
+        var yes = avail(p, grp), na = grp.d.length === 0;
+        grp.v.forEach(function (v) {
+          out += '<span class="g' + (yes ? " yes" : na ? " na" : "") + '">' + esc(pick(v.n, v.s)) + "</span>";
+        });
+      });
+      out += "</div></div>";
+    });
+    return out + "</div>";
+  }
+  function renderDetail() {
+    var el = $("detail");
+    var p = selected && S[selected];
+    if (!p) {
+      el.dataset.open = "false";
+      el.innerHTML = '<p class="hint">' + esc(t("pick")) + "</p>";
+      return;
+    }
+    var x = excluded.has(p.id), g = caught.has(p.id) && !x, c = cat(p);
+    var o = !x && !g && owned.has(p.id), dn = !x && hasN(p.id);
+    var A = SPR + "other/official-artwork/";
+    el.dataset.open = "true";
+    el.innerHTML = '<button type="button" class="close" data-act="close">' + esc(t("close")) + "</button>" +
+      "<div><h2 class=\"dname\">" + esc(nameOf(p)) + '</h2><p class="dmeta"><b>#' + pad(p.b) + "</b> · " + esc(t("gen")) + " " + roman(p.g) + (p.f ? " · " + esc(formLabel(p)) : "") + (c ? " · " + esc(t(c === "leg" ? "legS" : "mythS")) : "") + "</p>" +
+      '<p class="status' + (g ? " got" : "") + '">' + esc(x ? t("exS") : g ? t("gotS") : o ? t("capS") : t("notS")) + "</p></div>" +
+      '<div class="pair">' +
+      '<figure class="fig' + (g ? "" : " on") + '"><img src="' + A + p.id + '.png" data-fb="' + SPR + p.id + '.png" alt=""><figcaption>' + esc(t("normal")) + "</figcaption></figure>" +
+      '<figure class="fig' + (g ? " on" : "") + '"><img src="' + A + "shiny/" + p.id + '.png" data-fb="' + SPR + "shiny/" + p.id + '.png" alt=""><figcaption>' + esc(t("shinyL")) + "</figcaption></figure></div>" +
+      (x ? "" : '<button type="button" class="cta' + (dn ? " on" : "") + '" data-act="cap-detail"' + (g ? " disabled" : "") + ' title="' + esc(g ? t("capLock") : "") + '">' + esc(dn ? t("uncapD") : t("capD")) + "</button>" +
+        '<button type="button" class="cta' + (g ? " on" : "") + '" data-act="toggle-detail">' + esc(g ? t("unmark") : t("mark")) + "</button>") +
+      '<button type="button" class="cta on" data-act="excl-detail">' + esc(x ? t("unD") : t("exD")) + "</button>" +
+      gamesHTML(p);
+  }
+
+  function applyLang() {
+    document.documentElement.lang = lang === "ja-Hrkt" ? "ja" : lang;
+    $("sub").textContent = t("sub");
+    $("t-lang").textContent = t("lang");
+    $("t-shiny").textContent = t("shinyL"); $("t-dex").textContent = t("dexL"); $("l-gens").textContent = t("genProg");
+    $("l-form").textContent = t("form");
+    $("t-showmega").textContent = t("showMega");
+    $("show-mega").checked = showMega;
+    renderDiag();
+    $("l-gen").textContent = t("gen"); $("l-cat").textContent = t("cat"); $("l-st").textContent = t("st"); $("l-q").textContent = t("q");
+    $("q").placeholder = t("qph");
+    $("empty-text").textContent = t("empty"); $("reset").textContent = t("reset");
+    $("b-export").textContent = t("exp"); $("b-import").textContent = t("imp"); $("b-refresh").textContent = t("refresh");
+    $("retry").textContent = t("retry");
+    if (!$("err").hidden) $("err-text").textContent = t("err");
+    progress(doneCount);
+    render(); renderDetail();
+  }
+
+  function toggle(id) {
+    if (caught.has(id)) caught.delete(id); else { caught.add(id); owned.add(id); }
+    saveCaught(); saveOwned();
+    render(); renderDetail();
+    var b = document.querySelector('.tile[data-id="' + id + '"] .mark');
+    if (b && document.activeElement === document.body) b.focus();
+  }
+
+  // Pokédex normal : un shiny obtenu compte déjà comme capturé, son bouton est donc verrouillé
+  function toggleCap(id) {
+    if (caught.has(id)) return;
+    if (owned.has(id)) owned.delete(id); else owned.add(id);
+    saveOwned();
+    render(); renderDetail();
+  }
+  function toggleEx(id) {
+    if (excluded.has(id)) excluded.delete(id); else excluded.add(id);
+    saveExcluded();
+    render(); renderDetail();
+  }
+
+  // ---------- Événements ----------
+  document.addEventListener("click", function (e) {
+    var chipEl = e.target.closest(".chip");
+    if (chipEl) {
+      var grp = chipEl.dataset.group, v = chipEl.dataset.val;
+      f[grp] = grp === "gen" ? Number(v) : v;
+      render(); return;
+    }
+    var act = e.target.closest("[data-act]");
+    if (act) {
+      var a = act.dataset.act, tile = act.closest(".tile");
+      var id = tile ? Number(tile.dataset.id) : selected;
+      if (a === "open") { selected = id; render(); renderDetail(); }
+      else if (a === "mark") toggle(id);
+      else if (a === "toggle-detail") toggle(selected);
+      else if (a === "cap") toggleCap(id);
+      else if (a === "cap-detail") toggleCap(selected);
+      else if (a === "gen") { var gn = Number(act.dataset.gen); f.gen = f.gen === gn ? 0 : gn; render(); }
+      else if (a === "exclude") toggleEx(id);
+      else if (a === "excl-detail") toggleEx(selected);
+      else if (a === "close") { selected = null; render(); renderDetail(); }
+      return;
+    }
+    if (e.target.id === "reset") { f = { gen: 0, cat: "all", form: "all", st: "all", q: "" }; $("q").value = ""; render(); }
+    if (e.target.id === "retry") start();
+    if (e.target.id === "b-export") exportData();
+    if (e.target.id === "b-import") $("file").click();
+    if (e.target.id === "b-refresh") {
+      try { localStorage.removeItem(CACHE_KEY); } catch (er) {}
+      S = {}; META = null; complete = false; total = 0; exList = []; render(); renderDetail(); renderDiag(); start();
+    }
+  });
+  $("q").addEventListener("input", function (e) { f.q = e.target.value; render(); });
+  $("show-mega").addEventListener("change", function (e) {
+    showMega = e.target.checked;
+    try { localStorage.setItem(SHOWMEGA_KEY, showMega ? "1" : "0"); } catch (er) {}
+    if (!showMega && (f.form === "mega" || f.form === "gmax")) f.form = "all";
+    if (!showMega && selected && S[selected] && (S[selected].f === "mega" || S[selected].f === "gmax")) selected = null;
+    render(); renderDetail();
+  });
+  $("lang").addEventListener("change", function (e) {
+    lang = e.target.value;
+    try { localStorage.setItem(LANG_KEY, lang); } catch (er) {}
+    applyLang();
+  });
+  $("file").addEventListener("change", function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        var d = JSON.parse(r.result);
+        var arr = Array.isArray(d) ? d : d.caught;
+        if (Array.isArray(arr)) arr.forEach(function (n) { if (Number.isInteger(n) && n > 0) caught.add(n); });
+        if (!Array.isArray(d) && Array.isArray(d.excluded)) d.excluded.forEach(function (n) { if (Number.isInteger(n) && n > 0) excluded.add(n); });
+        if (!Array.isArray(d) && Array.isArray(d.owned)) d.owned.forEach(function (n) { if (Number.isInteger(n) && n > 0) owned.add(n); });
+        saveCaught(); saveExcluded(); saveOwned(); render(); renderDetail();
+      } catch (er) {}
+    };
+    r.readAsText(file);
+    e.target.value = "";
+  });
+  // Image absente : on tente le petit sprite, sinon on affiche l'initiale
+  document.addEventListener("error", function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== "IMG") return;
+    if (el.dataset.fb && !el.dataset.fbd) { el.dataset.fbd = "1"; el.src = el.dataset.fb; return; }
+    var par = el.parentNode;
+    if (par) par.classList.add(par.classList.contains("fig") ? "broken" : "noimg");
+    if (!par || !par.classList.contains("fig")) el.remove();
+  }, true);
+
+  function exportData() {
+    var blob = new Blob([JSON.stringify({ app: "pokedex-shiny", caught: Array.from(caught).sort(function (a, b) { return a - b; }), excluded: Array.from(excluded).sort(function (a, b) { return a - b; }), owned: Array.from(owned).sort(function (a, b) { return a - b; }) })], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "pokedex-shiny.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  // ---------- Démarrage ----------
+  function start() {
+    var work = [];
+    if (!complete) work.push(loadSpecies().catch(function () { showErr(); }));
+    else $("loader").hidden = true;
+    if (!META) work.push(loadMeta().catch(function () {}));
+    return Promise.all(work);
+  }
+  $("lang").innerHTML = LANGS.map(function (l) { return '<option value="' + l[0] + '">' + esc(l[1]) + "</option>"; }).join("");
+  $("lang").value = lang;
+  applyLang();
+  start();
+})();
+</script>
+</body>
+</html>
